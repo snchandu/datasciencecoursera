@@ -1,0 +1,101 @@
+---
+# Title: "Machine Learning Prediction Assignment"
+author: "Satya Chandu"
+date: "June 20, 2016"
+output: html_document
+---
+# Prediction Assignment Writeup
+The website  http://groupware.les.inf.puc-rio.br/har provided lot of information regarding weight lifting exercise data colected by the devices like Fitbit, Jawbone and Nike FuelBand. In this project, the goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants to predict the manner in which praticipants did the exercise.The dependent variable is classe and we can use any predictors that are available in the data. The data sets pml-training.csv and pml-testing.csv are available from the web site.
+```{r}
+options(warn=-1)
+library(caret)
+library(randomForest)
+library(Hmisc)
+set.seed(1024)
+training_data <- read.csv("/Users/502573958/Downloads/pml-training.csv",na.strings=c("", "NA", "NULL") )
+evaluation_data <- read.csv("/Users/502573958/Downloads/pml-testing.csv", na.strings=c("", "NA", "NULL") )
+```
+##Data Processing:
+This data consists of so many NA's and unrelaed features. Can simply omit all of them and create a new training_corrected data for prediction purposes.Also remove the unrelaed features like username, window etc.
+
+```{r}
+training_cor <- training_data[ , colSums(is.na(training_data)) == 0]
+undesirable_features = c('X', 'user_name', 'raw_timestamp_part_1', 'raw_timestamp_part_2', 'cvtd_timestamp', 'new_window', 'num_window')
+training_corrected <- training_cor[, -which(names(training_cor) %in% undesirable_features)]
+corrMatrix <- cor(na.omit(training_corrected[sapply(training_corrected, is.numeric)]))
+corrDF <- expand.grid(row = 1:52, col = 1:52)
+corrDF$correlation <- as.vector(corrMatrix)
+levelplot(correlation ~ row+ col, corrDF)
+```
+##Tidy data:
+Also Remove the correlated varaibles beyond 0.9 so that we can use only independent variables.
+Then obtained data of 19622  with 46 features instead of 160
+```{r}
+removecor = findCorrelation(corrMatrix, cutoff = .90, verbose = TRUE)
+training_corrected = training_corrected[,-removecor]
+inTrain <- createDataPartition(y=training_corrected$classe, p=0.7, list=FALSE)
+training <- training_corrected[inTrain,]
+testing <- training_corrected[-inTrain,]
+```
+## Prediction Models:
+After obtaining the tidy data, it can be used for Prediction. For prediction, I used three different models like tree, rpart and Random Forests. Plot the Tree.
+```{r}
+library(tree)
+set.seed(12345)
+tree.training <- tree(classe~., data=training)
+summary(tree.training)
+plot(tree.training)
+text(tree.training,pretty=0, cex =.8)
+```
+Prediction using rpart (49%)
+```{r}
+library(caret)
+modFit <- train(classe ~ .,method="rpart",data=training)
+print(modFit$finalModel)
+tree.pred=predict(modFit, testing)
+predMatrix = with(testing,table(tree.pred,classe))
+sum(diag(predMatrix))/sum(as.vector(predMatrix)) # error rate 49% and 31%
+```
+Prediction using tree process (Accuracy 67%)
+```{r}
+tree.pred=predict(tree.training,testing,type="class")
+predMatrix = with(testing,table(tree.pred,classe))
+sum(diag(predMatrix))/sum(as.vector(predMatrix)) # 67% Pred error rate 31%
+```
+## Cross Validations:
+Prediction for tree using Cross Validation Pruning and further pruning. Plot the training data
+
+```{r}
+cv.training=cv.tree(tree.training,FUN=prune.misclass)
+cv.training
+plot(cv.training)
+```
+##Prediction Analysis: 
+Using rpart method and tree method obtained accuracy of 49% and 66%. After pruning also the accuracy remained at 65.89 ~66%. So, it was further pruned and found that accuracy remain same as shown below. Then selected the Random Forests process for Prediction accuracy.
+```{r}
+prune.training <- prune.misclass(tree.training, best=18)
+tree.pred=predict(prune.training,testing,type="class")
+predMatrix = with(testing,table(tree.pred,classe))
+sum(diag(predMatrix))/sum(as.vector(predMatrix))
+```
+## Random Forest Prediction:
+ Using Random Forest, obtained an accuracy of 99.35%. Shown the plot also. From the precition models it is observed that maximum accuracy is obtained from this RF model and it is more useful than the models like tree, pruned tree and rpart etc. Also used the same model for test cases for classification.
+
+```{r}
+require(randomForest)
+set.seed(12345)
+rf.training <- randomForest(classe~., data=training, ntree=100, importance=TRUE)
+rf.training
+##Plot the RF Training data
+varImpPlot(rf.training)
+tree.pred <- predict(rf.training, testing, type="class")
+predMatrix <- with(testing, table(tree.pred, classe))
+sum(diag(predMatrix))/sum(as.vector(predMatrix))  ## gave 99.35% accuracy
+```
+## Conclusion:
+For evaluation, the test data was provided in the web site. evaluation_data  is used to classify the 
+levels successfuly. All 20 test cases are correctly classified using the random forest model.
+```{r}
+answers <- predict(rf.training, evaluation_data)
+answers
+```

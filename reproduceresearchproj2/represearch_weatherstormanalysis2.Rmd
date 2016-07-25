@@ -1,0 +1,118 @@
+---
+title: "Weather Storm Analysis-Project2"
+author: "Satya Chandu"
+date: "July 22, 2016"
+output: pdf_document
+---
+# Synopsis
+The data from the National Oceanic and Atmospheric Administration (NOAA) consists of weather events, occurrences, and several measures of adverse events associated with it. 
+We need to assess - Events and population health -
+(ii) What type of events  have the greater economic consequences.
+
+## Data Processing
+
+Read the storm data repdata%2Fdata%2FStormData.csv.bz2 from the web site whose url is https://d396qusza40orc.cloudfront.net/. Download it and read the csv data file and name it as stormdata and use it for futher analysis. The data consists of features namely State, beginning date, beginning time, county, county name, state, event type, Beginning Range, Beginning location, end date, end time county_end,end_range, end_location, width, FMAG, Fatalities, Injuries, propdmg, propdmgexp, cropdmg, cropdmgexp, WFO, state office, zone names, Latitude, Longitude, latitude_e, longitide_, Remarksand  refund etc. 
+
+
+```{r setup, include=FALSE}
+#options(scipen = 12)
+#library(R.utils)
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+knitr::opts_chunk$set(echo = TRUE)
+download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2","storms.csv.bz2")
+df1 <- read.csv("storms.csv.bz2",stringsAsFactors=F)
+head(df1)
+
+```
+## Data Analysis
+Part of exploratory analysis, I found that Fatalities, Injuries and Property damage labels do not have any missing values. These are the main effected features with the evtype fields. To assess the population health or economic consequences  we need to find the behavior of evtypes and these three labels so that I can provide valuable analysis of the data. For this analysis, it is observed that I need only few selected varaibles namely evtype, fatalities, injuries, propdmg, propdmgexp,cropdmg and cropdmgexp are taken  into a Data frame
+
+```{r}
+df1 <- data.frame(df1$EVTYPE, df1$FATALITIES, df1$INJURIES, df1$PROPDMG, df1$PROPDMGEXP, df1$CROPDMG, df1$CROPDMGEXP)
+```
+Now data is further screened and cleansed. Next I want to apply transformation to avoid empty values, make damages to USD (US$) and data will be converted to numeric type. Further the values of the  variables propdmgexp and cropdmgexp are H, K, M  and B are interpreted as 2 (100), 3 (1000), 6(1000000) and (1000000000) so that I can calculate the damage caused by different events to a uniform level.
+
+```{r}
+df1$df1.FATALITIES[(df1$df1.FATALITIES == "")] <- 0
+df1$df1.INJURIES[(df1$df1.INJURIES == "")] <- 0
+df1$df1.PROPDMG[(df1$df1.PROPDMG == "")] <- 0
+df1$df1.CROPDMG[(df1$df1.CROPDMG == "")] <- 0
+
+df1$df1.PROPDMGEXP <- as.character(df1$df1.PROPDMGEXP)
+df1$df1.CROPDMGEXP <- as.character(df1$df1.CROPDMGEXP)
+
+# use a uniform numbers-only damage magnitude representation
+df1$df1.PROPDMGEXP[(df1$df1.PROPDMGEXP == "")] <- 0
+df1$df1.PROPDMGEXP[(df1$df1.PROPDMGEXP == "+") | (df1$df1.PROPDMGEXP == "-") | (df1$df1.PROPDMGEXP == "?")] <- 1
+df1$df1.PROPDMGEXP[(df1$df1.PROPDMGEXP == "h") | (df1$df1.PROPDMGEXP == "H")] <- 2
+df1$df1.PROPDMGEXP[(df1$df1.PROPDMGEXP == "k") | (df1$df1.PROPDMGEXP == "K")] <- 3
+df1$df1.PROPDMGEXP[(df1$df1.PROPDMGEXP == "m") | (df1$df1.PROPDMGEXP == "M")] <- 6
+df1$df1.PROPDMGEXP[(df1$df1.PROPDMGEXP == "B")] <- 9
+df1$df1.CROPDMGEXP[(df1$df1.CROPDMGEXP == "")] <- 0
+df1$df1.CROPDMGEXP[(df1$df1.CROPDMGEXP == "+") | (df1$df1.CROPDMGEXP == "-") | (df1$df1.CROPDMGEXP == "?")] <- 1
+df1$df1.CROPDMGEXP[(df1$df1.CROPDMGEXP == "h") | (df1$df1.CROPDMGEXP == "H")] <- 2
+df1$df1.CROPDMGEXP[(df1$df1.CROPDMGEXP == "k") | (df1$df1.CROPDMGEXP == "K")] <- 3
+df1$df1.CROPDMGEXP[(df1$df1.CROPDMGEXP == "m") | (df1$df1.CROPDMGEXP == "M")] <- 6
+df1$df1.CROPDMGEXP[(df1$df1.CROPDMGEXP == "B")] <- 9
+
+```
+
+Convert to integer for computation of sum of daages for different event types
+```{r}
+# convert to integer for computation of next step.
+df1$df1.PROPDMGEXP <- as.integer(df1$df1.PROPDMGEXP)
+df1$df1.CROPDMGEXP <- as.integer(df1$df1.CROPDMGEXP)
+```
+# Total Damages Evaluation for each event
+```{r}
+totalDamageUSD <- df1$df1.PROPDMG * 10^df1$df1.PROPDMGEXP + df1$df1.CROPDMG * 10^df1$df1.CROPDMGEXP
+df1 <- cbind(df1, totalDamageUSD)
+
+```
+## Aggregrate the data by sums to assess the maximum damage
+```{r}
+# Subsetting the data, keeping on the numeric values and the event type column
+df1<-df1[,c(1,2,3,8)]
+
+# Aggregate the data
+aggData<-aggregate(. ~ df1.EVTYPE,data = df1,FUN=sum)
+
+# Matrix containing only the Top 10 events are calculated
+
+topFatalitis<-head(aggData[order(aggData$df1.FATALITIES,decreasing=T),],10)
+topInjuries<-head(aggData[order(aggData$df1.INJURIES,decreasing=T),],10)
+topDamages<-head(aggData[order(aggData$totalDamageUSD,decreasing=T),],10)
+
+```
+## Results:
+Based on the data now we can answer the questions that were asked in this assignment.
+Q 1.	Across the United States, which types of events are most harmful with respect to population health?
+The answer can give by plotting the TOP 10 events which have caused the highest number of Fatalities. From the results data that was observed that 5633 fatalities and 91346 injuries were caused by Tornado.The further damaged is caused by the excessive heat. This is further confirmed by the graph as well.
+
+```{r}
+topFatalitis<-head(aggData[order(aggData$df1.FATALITIES,decreasing=T),],10)
+ggplot(data = topFatalitis, aes(x = topFatalitis$df1.EVTYPE, y = topFatalitis$df1.FATALITIES)) + geom_bar(stat = "identity") + 
+    theme(axis.text.x = element_text(angle = 90, hjust = 1)) + xlab("Event Type") + 
+    ylab("# of Fatalities") + ggtitle("Highest Fatality Counts during 1950-2011")
+```
+Let us see the Injury Results:
+Maxium number of injuries were happened due to Tornado (91346) followed by wind(6957) and flood (6789).
+
+```{r}
+topInjuries<-head(aggData[order(aggData$df1.INJURIES,decreasing=T),],10)
+ggplot(data = topInjuries, aes(x = topInjuries$df1.EVTYPE, y = topInjuries$df1.INJURIES,col='red')) + geom_bar(stat = "identity") + 
+    theme(axis.text.x = element_text(angle = 90, hjust = 1)) + xlab("Event Type") +  ylab("# of Injuries") + ggtitle("Highest Injuries Counts during 1950-2011")
+
+```
+Q2. Across the United States, which types of events have the greatest economic consequences?
+Answer: The maximum dmage is caused by Flood (US$ 150319678257) followed by events hurricane and Tornado (US$ 71913712800,US$ 57362334486 ) respectively.
+
+
+```{r}
+ggplot(data = topDamages, aes(x = topDamages$df1.EVTYPE, y = topDamages$totalDamageUSD,col='red')) + geom_bar(stat = "identity") + 
+    theme(axis.text.x = element_text(angle = 90, hjust = 1)) + xlab("Event Type") + 
+    ylab("Damages in USD") + ggtitle("Most Expensive Type of Events during 1950-2011")
+
+```
